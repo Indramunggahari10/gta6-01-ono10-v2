@@ -3,17 +3,134 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<title>Palma Verde — Open Streets</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0a1026; font-family: system-ui, "Segoe UI", Roboto, sans-serif; }
   #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
   #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hidden { display: none !important; }
+
+  /* HUD */
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; }
+  #hud-top-left { position: absolute; top: 14px; left: 16px; background: rgba(8,12,20,.62); border-radius: 10px; padding: 10px 14px; min-width: 190px; }
+  #hud-money { font-size: 26px; font-weight: 800; color: #7de08a; letter-spacing: .5px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; font-weight: 700; }
+  .bar { flex: 1; height: 9px; background: rgba(255,255,255,.18); border-radius: 5px; overflow: hidden; }
+  .bar > div { height: 100%; }
+  #hud-health-fill { background: #3ddc5a; width: 100%; }
+  #hud-armor-fill { background: #4fa8ff; width: 0%; }
+  #hud-ammo { font-size: 13px; color: #ffd21f; margin-top: 6px; font-weight: 700; }
+  #hud-top-right { position: absolute; top: 14px; right: 16px; text-align: right; background: rgba(8,12,20,.62); border-radius: 10px; padding: 10px 14px; }
+  #hud-stars { font-size: 24px; letter-spacing: 3px; color: rgba(255,255,255,.4); }
+  #hud-clock { font-size: 15px; font-weight: 700; margin-top: 2px; }
+  #hud-speed { font-size: 22px; font-weight: 800; margin-top: 2px; }
+  #hud-objective { position: absolute; bottom: 118px; left: 50%; transform: translateX(-50%); background: rgba(8,12,20,.62); border-radius: 8px; padding: 8px 16px; font-size: 16px; font-weight: 600; max-width: 72%; text-align: center; }
+  #hud-mission { position: absolute; bottom: 156px; left: 50%; transform: translateX(-50%); color: #ffd21f; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 1px 4px #000; }
+  #hud-toast { position: absolute; bottom: 74px; left: 50%; transform: translateX(-50%); background: rgba(8,12,20,.72); border-radius: 8px; padding: 8px 16px; font-size: 15px; font-weight: 600; max-width: 72%; text-align: center; }
+  #minimap { position: absolute; left: 16px; bottom: 16px; width: 180px; height: 180px; border: 2px solid rgba(255,255,255,.55); border-radius: 8px; background: #12333d; }
+  #hud-hint { position: absolute; right: 16px; bottom: 16px; background: rgba(8,12,20,.55); border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 1.7; text-align: right; }
+
+  /* Phone call */
+  #phone { position: absolute; top: 76px; left: 50%; transform: translateX(-50%); width: 420px; max-width: 88%; background: rgba(10,14,24,.92); border: 1px solid #ffd21f; border-radius: 12px; padding: 14px 18px; pointer-events: auto; }
+  #phone-caller { font-weight: 800; color: #ffd21f; font-size: 15px; }
+  #phone-text { margin-top: 6px; font-size: 14px; line-height: 1.5; }
+  #phone-answer { margin-top: 10px; font-size: 13px; color: #7de08a; font-weight: 700; }
+
+  /* Full screens */
+  .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(5,8,16,.72); color: #fff; z-index: 5; }
+  .panel { max-width: 620px; width: 88%; background: rgba(10,16,28,.94); border: 1px solid rgba(255,210,31,.5); border-radius: 16px; padding: 34px 40px; text-align: center; }
+  .panel h1 { margin: 0 0 4px; font-size: 52px; letter-spacing: 2px; color: #ffd21f; }
+  .panel h2 { margin: 0 0 12px; font-size: 30px; color: #ffd21f; }
+  .panel p { font-size: 16px; line-height: 1.6; color: #dfe6ee; }
+  .panel .sub { color: #9fb0c3; font-size: 14px; }
+  .panel .controls { text-align: left; display: inline-block; font-size: 14px; line-height: 1.9; color: #dfe6ee; margin: 10px 0; }
+  .panel .prompt { margin-top: 16px; font-size: 17px; font-weight: 700; color: #7de08a; }
+
+  /* Touch controls */
+  #touch { position: fixed; inset: auto 0 0 0; display: none; justify-content: space-between; padding: 0 14px 86px; pointer-events: none; z-index: 4; }
+  #touch .cluster { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(2, 56px); gap: 8px; pointer-events: auto; }
+  #touch button { background: rgba(8,12,20,.6); color: #fff; border: 1px solid rgba(255,255,255,.5); border-radius: 12px; font-size: 20px; font-weight: 800; }
+  #touch .actions { display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
+  #touch .actions button { width: 64px; height: 56px; font-size: 14px; }
+  @media (pointer: coarse) { #touch { display: flex; } #hud-hint { display: none; } }
 </style>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
+<canvas id="game" aria-label="Palma Verde: drive and walk around a coastal open-world city, steal cars, dodge the police and run jobs for Mara Solis"></canvas>
 <p id="status" role="status" aria-live="polite"></p>
+
+<div id="hud">
+  <div id="hud-top-left">
+    <div id="hud-money">$120</div>
+    <div class="bar-row"><span>HP</span><div class="bar"><div id="hud-health-fill"></div></div></div>
+    <div class="bar-row"><span>AR</span><div class="bar"><div id="hud-armor-fill"></div></div></div>
+    <div id="hud-ammo">Ammo 24</div>
+  </div>
+  <div id="hud-top-right">
+    <div id="hud-stars">☆☆☆☆☆</div>
+    <div id="hud-clock">08:00</div>
+    <div id="hud-speed"></div>
+  </div>
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="hud-mission"></div>
+  <div id="hud-objective"></div>
+  <div id="hud-toast"></div>
+  <div id="hud-hint">WASD drive / walk · E enter car<br>Space punch · F shoot · C camera<br>Q answer Mara · R radio · P pause</div>
+  <div id="phone" class="hidden">
+    <div id="phone-caller"></div>
+    <div id="phone-text"></div>
+    <div id="phone-answer">Press Q to take the job</div>
+  </div>
+</div>
+
+<div id="screen-title" class="screen">
+  <div class="panel">
+    <h1>PALMA VERDE</h1>
+    <p><b>Open Streets</b> — a sun-soaked coastal city, yours to take. Dario Reyes is back in town with $120, a borrowed jacket and a fixer on the phone.</p>
+    <p class="sub">Steal cars, outrun the Verde PD, run five jobs for Mara Solis, and build your haul. The city never sleeps — neither do the cops.</p>
+    <div class="controls">
+      <b>W A S D</b> — drive / walk &nbsp;·&nbsp; <b>Shift</b> — run<br>
+      <b>E</b> — steal / enter a car, <b>E</b> again to get out<br>
+      <b>Space</b> — punch &nbsp;·&nbsp; <b>F</b> — shoot &nbsp;·&nbsp; <b>C</b> — camera<br>
+      <b>Q</b> — answer Mara's call &nbsp;·&nbsp; <b>R</b> — radio &nbsp;·&nbsp; <b>P</b> — pause
+    </div>
+    <p class="sub" id="title-progress"></p>
+    <p class="sub" id="title-best"></p>
+    <p class="prompt">Press Space or click to start</p>
+  </div>
+</div>
+
+<div id="screen-pause" class="screen hidden">
+  <div class="panel">
+    <h2>Paused</h2>
+    <p>Palma Verde waits for no one — except right now.</p>
+    <p class="prompt">Press P to keep playing</p>
+  </div>
+</div>
+
+<div id="screen-over" class="screen hidden">
+  <div class="panel">
+    <h2 id="over-title">WASTED</h2>
+    <p id="over-text"></p>
+    <p class="prompt">Press Space to get back out there</p>
+  </div>
+</div>
+
+<div id="screen-help" class="screen hidden"></div>
+
+<div id="touch">
+  <div class="cluster">
+    <span></span><button id="touch-up">▲</button><span></span>
+    <button id="touch-left">◀</button><button id="touch-down">▼</button><button id="touch-right">▶</button>
+  </div>
+  <div class="actions">
+    <button id="touch-enter">ENTER</button>
+    <button id="touch-punch">HIT</button>
+    <button id="touch-shoot">FIRE</button>
+    <button id="touch-run">RUN</button>
+  </div>
+</div>
+
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

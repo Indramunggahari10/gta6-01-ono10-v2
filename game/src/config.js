@@ -1,61 +1,106 @@
-// Every tuning number and colour in one place. The playfield is a fixed 1280x720 logical area;
-// the renderer scales it to the window, so no rule below depends on the screen size.
+// Palma Verde — shared tuning numbers for the whole game.
+// One place holds every magic number so the city, the cars, the police
+// and the missions all agree on speeds, sizes and money.
+export const VIEW = { width: 1280, height: 720, fov: 72 };
+export const SAVE_KEY = 'palma-verde-save-v1';
+export const BEST_KEY = 'palma-verde-best-v1';
 
-export const FIELD = { width: 1280, height: 720, groundY: 664 };
-
-/** The simulation's fixed step, in seconds: 60 updates a second whatever the display's rate. */
+// City grid: blocks are square, roads run between them.
+export const CITY = {
+  blocks: 9, // blocks across (and down)
+  block: 44, // block side in world units
+  road: 14, // road width between blocks
+  sidewalk: 3, // sidewalk strip around each block
+  maxHeight: 46, // tallest tower
+  minHeight: 7, // shortest shopfront
+};
 export const STEP = 1 / 60;
 
+// Player on foot.
 export const PLAYER = {
-  width: 72,
-  height: 24,
-  speed: 560,
-  invulnerable: 1.5,
+  walkSpeed: 7,
+  runSpeed: 11.5,
+  radius: 1.1,
+  height: 3.4,
+  maxHealth: 100,
+  punchDamage: 12,
+  punchRange: 3.2,
+  punchCooldown: 0.45,
+  shootCooldown: 0.28,
+  bulletDamage: 34,
+  bulletRange: 90,
+  startAmmo: 24,
+  maxAmmo: 120,
 };
 
-export const LIVES = 3;
-
-export const BLOCK = {
-  minWidth: 40,
-  maxWidth: 110,
-  height: 36,
-  speed: 240,
-  speedPerLevel: 30,
-  speedJitter: 90,
-  interval: 0.55,
-  intervalScale: 0.88,
-  minInterval: 0.14,
-  dodgePoints: 1,
+// Cars.
+export const CAR = {
+  accel: 26,
+  brake: 42,
+  reverseAccel: 16,
+  maxSpeed: 46,
+  maxReverse: 14,
+  turnRate: 2.1,
+  drag: 0.55,
+  grip: 8.5,
+  radius: 2.4,
+  length: 5.4,
+  width: 2.4,
+  health: 100,
+  policeMaxSpeed: 52,
 };
 
-export const COIN = {
-  size: 24,
-  speed: 190,
-  speedPerLevel: 14,
-  interval: 1.4,
-  intervalJitter: 0.8,
-  points: 10,
+// Traffic and pedestrians.
+export const TRAFFIC = { cars: 16, cruiseMin: 9, cruiseMax: 15 };
+export const CROWD = { walkers: 26, walkMin: 1.2, walkMax: 2.6 };
+
+// Wanted level.
+export const WANTED = {
+  max: 5,
+  stealCar: 1, // stealing a parked car
+  hitPedestrian: 1,
+  shoot: 1,
+  killCop: 2,
+  decaySeconds: 18, // unseen this long drops one star
+  copFootSpeed: 8.4,
+  copShootRange: 26,
+  copShootCooldown: 1.1,
 };
 
-/** Seconds of play per level, and the last level: speeds and spawn rates stop growing there. */
-export const LEVEL = { seconds: 12, max: 12 };
+// Money and pickups.
+export const MONEY = {
+  start: 120,
+  package: 40,
+  repairCost: 80,
+  ammoCost: 60,
+  bribeCost: 150, // pay-n-spray clears the wanted level
+};
 
-/** How many falling things can exist at once; the pool is allocated once, at boot. */
-export const POOL_SIZE = 64;
+// Day / night: one full cycle lasts this many seconds of play.
+export const DAY_LENGTH = 360;
 
+// Palette: a sun-soaked coastal city — warm walls, teal water, orange dusk.
 export const PALETTE = {
-  backdrop: '#11141b',
-  sky: '#1b1f2a',
-  ground: '#2a3040',
-  player: '#4fc3f7',
-  block: '#e5534b',
-  coin: '#f2c94c',
-  panel: '#252b38',
-  text: '#eef1f5',
-  muted: '#8b93a3',
+  skyDayTop: '#3f8fd2',
+  skyDayBottom: '#bfe3f2',
+  skyDuskTop: '#5a3d7a',
+  skyDuskBottom: '#ff9e5e',
+  skyNightTop: '#0a1026',
+  skyNightBottom: '#1c2b4a',
+  sea: '#1e7f8e',
+  sand: '#e8d29a',
+  grass: '#5d9b4f',
+  asphalt: '#33373d',
+  asphaltLine: '#e8e4c8',
+  sidewalk: '#9aa0a3',
+  buildingRoof: '#2c2f36',
+  windowLit: '#ffd978',
+  windowDark: '#20262e',
+  hudText: '#ffffff',
+  hudPanel: 'rgba(8, 12, 20, 0.62)',
+  wantedStar: '#ffd21f',
+  policeLightRed: '#ff2e3e',
+  policeLightBlue: '#2e7bff',
 };
 
-export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-
-/** Where the best score is kept between visits (this browser only). */
-export const BEST_KEY = 'block-dodger.best';
+export const FONT = 'system-ui, "Segoe UI", Roboto, sans-serif';

@@ -1,79 +1,110 @@
-// The screenshot scenes behind ?shot=start|play|end. Each one plays the real rules forward from a
-// fresh world for a fixed number of steps, steered by a simple autopilot (look ahead each way the
-// paddle could move, keep clear of blocks, chase the lowest coin when that is safe), so the frame
-// is what a short game really looks like and the same seed always gives the same frame.
-import { FIELD, PLAYER, STEP } from './config.js';
-import { EVENT_OVER, KIND_BLOCK } from './world.js';
-import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+// The screenshot scenes behind ?shot=cover|street|night|mission. Each one
+// sets the world to a real, playable moment — a chase, a street walk, a
+// night drive, a mission in progress — then plays the rules forward with a
+// simple autopilot (drive at the beacon, keep the car on the road) so the
+// frame is what a short game really looks like, and the same seed always
+// gives the same frame.
+import { STEP } from './config.js';
+import { snapToRoad } from './city.js';
+import { spawnPoliceCar } from './vehicles.js';
 
-const START_SECONDS = 5;
-const PLAY_SECONDS = 26;
-const END_LIMIT_SECONDS = 600;
-/**
- * How far ahead, in seconds, the autopilot checks each way it could move: the play scene's pilot
- * looks well ahead and keeps all its lives; the end scene's looks only a moment ahead, so it is
- * caught out once the blocks speed up, as a hurried player is.
- */
-const HORIZON_PLAY = 0.7;
-const HORIZON_END = 0.25;
-const SAMPLE = 1 / 30;
-const DIRECTIONS = [0, -1, 1];
-/** Extra room, each side, it keeps between the paddle and a block. */
-const MARGIN = 10;
-
-/** Seconds until moving in `direction` (-1, 0, 1) runs the paddle into a block; Infinity when it never does. */
-function timeToHit(state, direction, horizon) {
-  const player = state.player;
-  for (let t = SAMPLE; t <= horizon; t += SAMPLE) {
-    const x = Math.min(FIELD.width - player.width, Math.max(0, player.x + direction * PLAYER.speed * t));
-    for (let index = 0; index < state.items.length; index += 1) {
-      const item = state.items[index];
-      if (!item.active || item.kind !== KIND_BLOCK) continue;
-      const y = item.y + item.speed * t;
-      if (y + item.height > player.y && y < player.y + player.height && item.x < x + player.width + MARGIN && item.x + item.width > x - MARGIN) return t;
-    }
-  }
-  return Infinity;
+function angleDiff(a, b) {
+  let d = b - a;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
 }
 
-/** Of the safe ways to move, the one toward the lowest coin (or the centre); else the one that is hit last. */
-function autopilot(state, horizon) {
-  const player = state.player;
-  let coin = null;
-  for (let index = 0; index < state.items.length; index += 1) {
-    const item = state.items[index];
-    if (item.active && item.kind !== KIND_BLOCK && (coin === null || item.y > coin.y)) coin = item;
-  }
-  const target = coin === null ? FIELD.width / 2 : coin.x + coin.width / 2;
-  const centre = player.x + player.width / 2;
-  const wanted = target > centre + 8 ? 1 : target < centre - 8 ? -1 : 0;
-  let best = wanted;
-  let bestTime = timeToHit(state, wanted, horizon);
-  for (let index = 0; index < DIRECTIONS.length && bestTime !== Infinity; index += 1) {
-    const time = timeToHit(state, DIRECTIONS[index], horizon);
-    if (time > bestTime) {
-      bestTime = time;
-      best = DIRECTIONS[index];
-    }
-  }
-  return best;
+/** Drive toward the marker: forward, steering at the beacon. */
+function autopilotDrive(game) {
+  const car = game.playerCar;
+  if (!car) return { forward: 0, steer: 0, run: false };
+  const m = game.marker || { x: car.x + Math.sin(car.yaw) * 40, z: car.z + Math.cos(car.yaw) * 40 };
+  const want = Math.atan2(m.x - car.x, m.z - car.z);
+  const steer = Math.max(-1, Math.min(1, angleDiff(car.yaw, want) * 1.6));
+  return { forward: 1, steer, run: false };
+}
+
+function autopilotWalk(game) {
+  const p = game.player;
+  const m = game.marker || { x: p.x + 20, z: p.z + 20 };
+  const want = Math.atan2(m.x - p.x, m.z - p.z);
+  const dyaw = angleDiff(p.yaw, want);
+  return { forward: 1, steer: Math.max(-1, Math.min(1, dyaw * 2)), run: false };
+}
+
+function runFor(game, seconds, pilot) {
+  const steps = Math.round(seconds / STEP);
+  for (let i = 0; i < steps; i += 1) game.step(STEP, pilot(game));
 }
 
 /**
- * Set `world` to the named scene (start, play or end; any other name is start) and return the
- * screen to draw over it and the best score to show.
+ * Set the game to the named scene and return the screen to draw over it.
+ * Any other name stages the cover chase.
  */
-export function stageShot(name, world) {
-  world.reset();
-  if (name !== 'play' && name !== 'end') {
-    for (let index = 0; index < START_SECONDS / STEP; index += 1) world.step(STEP, 0, true);
-    return { screen: SCREEN_TITLE, best: 0 };
+export function stageShot(name, game) {
+  const city = game.city;
+  if (name === 'street') {
+    game.timeOfDay = 0.35; // bright morning, 08:24 on the HUD clock
+    game.wanted = 0;
+    // On the north-south road at x=22, facing down it toward the beacon.
+    // The player walks the right-hand lane (x=25.5), off the centre-line
+    // dashes, so the figure reads against dark asphalt, not on a white dash.
+    game.player.x = 25.5;
+    game.player.z = -100;
+    game.player.yaw = 0;
+    game.playerCar = null;
+    game.mission = null;
+    game.marker = { x: 25.5, z: 20, label: 'Plaza Verde', color: '#ffd21f' };
+    runFor(game, 2.5, autopilotWalk);
+    return { screen: 'play' };
   }
-  const limit = name === 'end' ? END_LIMIT_SECONDS : PLAY_SECONDS;
-  const horizon = name === 'end' ? HORIZON_END : HORIZON_PLAY;
-  for (let index = 0; index < limit / STEP; index += 1) {
-    if (world.step(STEP, autopilot(world.state, horizon), false) & EVENT_OVER) break;
+  if (name === 'night') {
+    game.timeOfDay = 0.8;
+    game.wanted = 2;
+    // Down the same road at night. Clear the whole stretch the player
+    // will drive, so the chase does not rear-end slow traffic mid-shot
+    // (the autopilot cannot steer around it), and bring the interceptor
+    // in from far behind so it chases without ramming into the frame.
+    game.cars = game.cars.filter((c) => !(Math.abs(c.x - 22) < 12 && c.z > -130 && c.z < 70));
+    game.playerCar = game.giveCar(22, -120, 0);
+    game.player.x = game.playerCar.x;
+    game.player.z = game.playerCar.z;
+    game.cops.cars = [spawnPoliceCar(city, game.rng, 22, -175)];
+    game.marker = { x: 22, z: 60, label: 'Marina Docks', color: '#ffd21f' };
+    runFor(game, 3, autopilotDrive);
+    return { screen: 'play' };
   }
-  const over = world.state.lives === 0;
-  return { screen: over ? SCREEN_OVER : SCREEN_PLAY, best: world.state.score };
+  if (name === 'mission') {
+    game.timeOfDay = 0.72; // dusk, 17:17 on the HUD clock
+    game.wanted = 1;
+    game.playerCar = null;
+    game.startMissionAt(1);
+    // Stand on the package's road, 18 units down it and facing the
+    // beacon — close enough that it fills the frame, far enough not to
+    // grab the package during the staging walk.
+    const first = game.mission.targets[0];
+    const spot = snapToRoad(first.x, first.z, 3.2);
+    game.player.x = spot.x + (spot.alongX ? 18 : 0);
+    game.player.z = spot.z + (spot.alongX ? 0 : 18);
+    game.player.yaw = Math.atan2(first.x - game.player.x, first.z - game.player.z);
+    runFor(game, 1.5, autopilotWalk);
+    return { screen: 'play' };
+  }
+  // cover: a daytime chase with three stars, two interceptors behind.
+  // The car starts in the middle of the east-west road (z=-94), not on
+  // its edge, so the chase camera is not pressed against a building.
+  game.timeOfDay = 0.38;
+  game.wanted = 3;
+  game.cars = game.cars.filter((c) => Math.hypot(c.x + 40, c.z + 94) > 25);
+  game.playerCar = game.giveCar(-40, -94, Math.PI / 2);
+  game.player.x = game.playerCar.x;
+  game.player.z = game.playerCar.z;
+  game.cops.cars = [
+    spawnPoliceCar(city, game.rng, -70, -130),
+    spawnPoliceCar(city, game.rng, -20, -140),
+  ];
+  game.marker = { x: 140, z: -94, label: 'Safehouse', color: '#ffd21f' };
+  runFor(game, 5, autopilotDrive);
+  return { screen: 'play' };
 }
